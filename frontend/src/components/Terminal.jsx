@@ -242,6 +242,7 @@ const Terminal = () => {
             const filename = command.substring(5).trim()
             if (filename) {
               setEditorModal({ filename, cwd: cwdRef.current.get(id) || '~' })
+              term.writeln(`\x1b[32mAbrindo editor para: ${filename}\x1b[0m`)
               writePrompt(term, cwdRef.current.get(id))
               return
             }
@@ -656,12 +657,12 @@ const FileEditorModal = ({ filename, cwd, onClose }) => {
   useEffect(() => {
     const loadFile = async () => {
       try {
-        // Usar apenas o nome do arquivo, não o path completo
-        const relativePath = filename.replace(/^.*\//, '') // Remove path, mantém só o nome
-        const response = await api.get(`/storage/file?path=${encodeURIComponent(relativePath)}`)
+        // Usar o filename exatamente como fornecido
+        const response = await api.get(`/storage/file?path=${encodeURIComponent(filename)}`)
         setContent(response.data)
       } catch (error) {
-        setContent('// Arquivo não encontrado ou erro ao carregar')
+        // Se não encontrar, criar arquivo vazio
+        setContent('')
       } finally {
         setLoading(false)
       }
@@ -672,8 +673,7 @@ const FileEditorModal = ({ filename, cwd, onClose }) => {
   const saveFile = async () => {
     setSaving(true)
     try {
-      const relativePath = filename.replace(/^.*\//, '') // Remove path, mantém só o nome
-      await api.put(`/storage/file?path=${encodeURIComponent(relativePath)}`, content, {
+      await api.put(`/storage/file?path=${encodeURIComponent(filename)}`, content, {
         headers: { 'Content-Type': 'text/plain' }
       })
     } catch (error) {

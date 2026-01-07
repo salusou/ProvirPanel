@@ -169,8 +169,12 @@ router.get('/file', async (req, res, next) => {
     }
     
     // Fallback para o storage normal
-    content = await storageManager.readFile(targetPath);
-    res.send(content);
+    try {
+      content = await storageManager.readFile(targetPath);
+      res.send(content);
+    } catch (err) {
+      res.status(404).json({ message: 'Arquivo não encontrado' });
+    }
   } catch (err) {
     next(err);
   }
