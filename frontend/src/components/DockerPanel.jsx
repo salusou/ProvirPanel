@@ -11,6 +11,18 @@ import {
 import api from '../services/api.js'
 import { createDockerLogsSocket, createDockerProgressSocket } from '../services/socket.js'
 
+// Polyfill para crypto.randomUUID
+const generateUUID = () => {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID()
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0
+    const v = c === 'x' ? r : (r & 0x3 | 0x8)
+    return v.toString(16)
+  })
+}
+
 const presetImages = [
   { name: 'PostgreSQL', image: 'postgres', tag: '16', description: 'Banco relacional' },
   { name: 'MySQL', image: 'mysql', tag: '8', description: 'Banco relacional' },
@@ -76,7 +88,7 @@ const DockerPanel = () => {
   };
 
   const addToast = (message, type = 'success') => {
-    const id = crypto.randomUUID()
+    const id = generateUUID()
     setToasts((prev) => [...prev, { id, message, type }])
     setTimeout(() => {
       setToasts((prev) => prev.filter((toast) => toast.id !== id))
