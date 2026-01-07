@@ -4,7 +4,7 @@ set -e
 # CloudPainel installer (FreeBSD)
 # Usage: fetch -o - https://example.com/install-freebsd.sh | sh
 
-REPO_URL="https://github.com/your-org/cloudpainel.git"
+REPO_URL="https://github.com/salusou/ProvirPanel.git"
 INSTALL_DIR="/usr/local/cloudpainel"
 ADMIN_USER="admin"
 ADMIN_PASS="admin123"

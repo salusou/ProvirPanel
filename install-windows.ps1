@@ -6,7 +6,7 @@ Usage (PowerShell as Administrator):
 
 $ErrorActionPreference = "Stop"
 
-$RepoUrl = "https://github.com/your-org/cloudpainel.git"
+$RepoUrl = "https://github.com/salusou/ProvirPanel.git"
 $InstallDir = "C:\CloudPainel"
 $AdminUser = "admin"
 $AdminPass = "admin123"

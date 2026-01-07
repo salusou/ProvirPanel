@@ -4,7 +4,7 @@ set -euo pipefail
 # CloudPainel one-liner installer (Linux only)
 # Usage: curl -fsSL https://example.com/install.sh | bash
 
-REPO_URL="https://github.com/your-org/provirpanel.git"
+REPO_URL="https://github.com/salusou/ProvirPanel.git"
 INSTALL_DIR="/home/provirpanel/provirpanel"
 NODE_MAJOR="18"
 ADMIN_USER="admin"
