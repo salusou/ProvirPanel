@@ -4,9 +4,9 @@ set -euo pipefail
 # CloudPainel installer (macOS Intel/Apple Silicon)
 # Usage: curl -fsSL https://example.com/install-macos.sh | bash
 
-REPO_URL="https://github.com/salusou/ProvirPanel.git"
+REPO_URL="https://github.com/ProvirCloud/provirpanel.git"
 INSTALL_DIR="${HOME}/provirpanel"
-NODE_MAJOR="18"
+NODE_MAJOR="22"
 ADMIN_USER="admin"
 ADMIN_PASS="admin123"
 PANEL_PORT="3000"

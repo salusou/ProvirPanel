@@ -4,9 +4,9 @@ set -euo pipefail
 # CloudPainel one-liner installer (Linux only)
 # Usage: curl -fsSL https://example.com/install.sh | bash
 
-REPO_URL="https://github.com/salusou/ProvirPanel.git"
-INSTALL_DIR="/home/provirpanel/provirpanel"
-NODE_MAJOR="18"
+REPO_URL="https://github.com/ProvirCloud/provirpanel.git"
+INSTALL_DIR="$(pwd)/provirpanel"
+NODE_MAJOR="22"
 ADMIN_USER="admin"
 ADMIN_PASS="admin123"
 PANEL_PORT="3000"
@@ -64,14 +64,14 @@ install_packages() {
   log "Installing base packages"
   if [[ "${PKG_MANAGER}" == "apt" ]]; then
     apt-get update -y
-    apt-get install -y curl wget git ca-certificates gnupg lsb-release openssl
+    apt-get install -y curl wget git ca-certificates gnupg lsb-release openssl nginx
   elif [[ "${PKG_MANAGER}" == "dnf" ]]; then
-    dnf install -y curl wget git ca-certificates gnupg2 openssl
+    dnf install -y curl wget git ca-certificates gnupg2 openssl nginx
   elif [[ "${PKG_MANAGER}" == "yum" ]]; then
-    yum install -y curl wget git ca-certificates gnupg2 openssl
+    yum install -y curl wget git ca-certificates gnupg2 openssl nginx
   elif [[ "${PKG_MANAGER}" == "zypper" ]]; then
     zypper refresh
-    zypper install -y curl wget git ca-certificates gpg2 openssl
+    zypper install -y curl wget git ca-certificates gpg2 openssl nginx
   fi
 }
 
@@ -90,7 +90,7 @@ install_node() {
       fi
     elif [[ "${FAMILY}" == "suse" ]]; then
       curl -fsSL "https://rpm.nodesource.com/setup_${NODE_MAJOR}.x" | bash - || true
-      zypper install -y nodejs || zypper install -y nodejs18
+      zypper install -y nodejs || zypper install -y nodejs22
     fi
   fi
 }
@@ -141,40 +141,64 @@ create_user() {
 clone_repo() {
   log "Cloning repository"
   if [[ ! -d "${INSTALL_DIR}" ]]; then
-    sudo -u provirpanel git clone "${REPO_URL}" "${INSTALL_DIR}"
+    git clone "${REPO_URL}" "${INSTALL_DIR}" || {
+      log "Failed to clone repository. Make sure it's public or configure credentials."
+      exit 1
+    }
+    chown -R provirpanel:provirpanel "${INSTALL_DIR}"
   else
-    log "Repository already exists, pulling latest"
-    sudo -u provirpanel git -C "${INSTALL_DIR}" pull
+    log "Repository found, continuing installation"
   fi
 }
 
 setup_database() {
   log "Configuring PostgreSQL database"
-  sudo -u postgres psql -v ON_ERROR_STOP=1 <<SQL
-DO $$
+  sudo -u postgres psql -v ON_ERROR_STOP=1 <<'SQL'
+DO $BODY$
 BEGIN
   IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'provirpanel') THEN
     CREATE ROLE provirpanel LOGIN PASSWORD 'provirpanel';
   END IF;
-END$$;
-CREATE DATABASE provirpanel OWNER provirpanel;
+END$BODY$;
 SQL
 
-  sudo -u provirpanel psql "postgres://provirpanel:provirpanel@localhost:5432/provirpanel" \
-    -f "${INSTALL_DIR}/backend/src/config/schema.sql"
+  # Criar banco se não existir
+  sudo -u postgres psql -c "SELECT 1 FROM pg_database WHERE datname = 'provirpanel'" | grep -q 1 || \
+    sudo -u postgres createdb -O provirpanel provirpanel
+
+  # Executar schema como root e depois conectar como provirpanel
+  if [[ -f "${INSTALL_DIR}/backend/src/config/schema.sql" ]]; then
+    sudo -u postgres psql provirpanel < "${INSTALL_DIR}/backend/src/config/schema.sql"
+  else
+    log "Warning: schema.sql not found, skipping database schema setup"
+  fi
 }
 
 install_dependencies() {
   log "Installing backend dependencies"
-  sudo -u provirpanel bash -lc "cd ${INSTALL_DIR} && npm install"
+  # Corrigir permissões do diretório pai
+  chown -R provirpanel:provirpanel "$(dirname "${INSTALL_DIR}")"
+  chown -R provirpanel:provirpanel "${INSTALL_DIR}"
+  chmod -R 755 "${INSTALL_DIR}"
+  
+  # Instalar como root no diretório do projeto
+  cd "${INSTALL_DIR}" && npm install
+  chown -R provirpanel:provirpanel "${INSTALL_DIR}"
 
   log "Installing frontend dependencies"
-  sudo -u provirpanel bash -lc "cd ${INSTALL_DIR}/frontend && npm install"
+  cd "${INSTALL_DIR}/frontend" && npm install
+  chown -R provirpanel:provirpanel "${INSTALL_DIR}"
 }
 
 build_frontend() {
   log "Building frontend"
-  sudo -u provirpanel bash -lc "cd ${INSTALL_DIR}/frontend && npm run build"
+  # Garantir permissões completas antes do build
+  chmod -R 755 "${INSTALL_DIR}"
+  chown -R root:root "${INSTALL_DIR}"
+  
+  # Executar build como root
+  cd "${INSTALL_DIR}/frontend" && npm run build
+  chown -R provirpanel:provirpanel "${INSTALL_DIR}"
 }
 
 configure_env() {
@@ -190,28 +214,90 @@ DATABASE_SSL=false
 CORS_ORIGIN=*
 JWT_SECRET=${jwt_secret}
 JWT_EXPIRES_IN=1d
+CLOUDPAINEL_PROJECTS_DIR=${INSTALL_DIR}/projects
+DEFAULT_ADMIN_USER=${ADMIN_USER}
+DEFAULT_ADMIN_PASS=${ADMIN_PASS}
+TERMINAL_OS_USER=provirpanel
 ENV
 
   chown provirpanel:provirpanel "${env_file}"
+  mkdir -p "${INSTALL_DIR}/projects"
+  chown -R provirpanel:provirpanel "${INSTALL_DIR}/projects"
 }
 
-generate_ssl() {
-  log "Generating self-signed SSL"
-  local ssl_dir="/home/provirpanel/ssl"
-  mkdir -p "${ssl_dir}"
-  openssl req -x509 -nodes -days 365 \
-    -newkey rsa:2048 \
-    -keyout "${ssl_dir}/cloudpainel.key" \
-    -out "${ssl_dir}/cloudpainel.crt" \
-    -subj "/CN=cloudpainel.local"
-  chown -R provirpanel:provirpanel "${ssl_dir}"
+configure_nginx() {
+  log "Configuring Nginx"
+  
+  cat <<NGINX > /etc/nginx/sites-available/provirpanel
+server {
+    listen 80;
+    server_name _;
+    
+    # API Backend
+    location /api/ {
+        proxy_pass http://localhost:${PANEL_PORT};
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+    
+    # Socket.io
+    location /socket.io/ {
+        proxy_pass http://localhost:${PANEL_PORT};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+    
+    # Admin Panel - servir arquivos estáticos
+    location /admin {
+        alias ${INSTALL_DIR}/frontend/dist;
+        try_files \$uri \$uri/ /index.html;
+        index index.html;
+    }
+    
+    # Admin Panel assets
+    location /assets/ {
+        alias ${INSTALL_DIR}/frontend/dist/assets/;
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+    
+    # Default redirect to admin
+    location = / {
+        return 301 /admin;
+    }
+}
+NGINX
+
+  # Garantir permissões do diretório dist
+  chmod -R 755 "${INSTALL_DIR}/frontend/dist"
+  
+  # Enable site
+  ln -sf /etc/nginx/sites-available/provirpanel /etc/nginx/sites-enabled/
+  rm -f /etc/nginx/sites-enabled/default
+  
+  # Test and reload nginx
+  nginx -t && systemctl reload nginx
+  systemctl enable nginx
 }
 
 configure_pm2() {
   log "Configuring PM2 processes"
-  sudo -u provirpanel bash -lc "cd ${INSTALL_DIR} && pm2 start backend/src/server.js --name provirpanel-backend"
-  sudo -u provirpanel bash -lc "cd ${INSTALL_DIR}/frontend && pm2 start npm --name provirpanel-frontend -- run preview -- --host 0.0.0.0 --port ${FRONTEND_PORT}"
-  sudo -u provirpanel pm2 save
+  # Parar processo existente se houver
+  pm2 delete provirpanel-backend 2>/dev/null || true
+  
+  # Aguardar banco estar pronto
+  sleep 3
+  
+  # Executar PM2 com as variáveis de ambiente
+  cd "${INSTALL_DIR}" && pm2 start backend/src/server.js --name provirpanel-backend --env production
+  pm2 save
 
   log "Enabling PM2 startup service"
   pm2 startup systemd -u provirpanel --hp /home/provirpanel
@@ -232,10 +318,11 @@ print_summary() {
   local ip_addr
   ip_addr=$(hostname -I | awk '{print $1}')
   log "Installation complete"
-  echo "Panel URL: http://${ip_addr}:${FRONTEND_PORT}"
-  echo "API URL:   http://${ip_addr}:${PANEL_PORT}"
+  echo "Panel URL: http://${ip_addr}/admin"
+  echo "API URL:   http://${ip_addr}/api"
   echo "Admin user: ${ADMIN_USER}"
   echo "Admin pass: ${ADMIN_PASS}"
+  echo "Install dir: ${INSTALL_DIR}"
 }
 
 main() {
@@ -252,7 +339,7 @@ main() {
   install_dependencies
   build_frontend
   configure_env
-  generate_ssl
+  configure_nginx
   configure_pm2
   create_admin_user
   print_summary
