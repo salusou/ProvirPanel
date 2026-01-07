@@ -34,7 +34,7 @@ app.get('/health', (req, res) => {
 
 app.use('/auth', authRoutes);
 app.use('/api/metrics', authMiddleware, metricsRoutes);
-app.get('/api/logs', authMiddleware, (req, res) => {
+app.get('/logs', authMiddleware, (req, res) => {
   res.json({ 
     logs: [
       { timestamp: new Date().toISOString(), level: 'info', message: 'Sistema iniciado' },
@@ -42,7 +42,7 @@ app.get('/api/logs', authMiddleware, (req, res) => {
     ]
   });
 });
-app.get('/api/health', authMiddleware, (req, res) => {
+app.get('/health', authMiddleware, (req, res) => {
   res.json({ 
     services: {
       database: { status: 'healthy', message: 'PostgreSQL conectado' },
