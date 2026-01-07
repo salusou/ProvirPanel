@@ -1,6 +1,6 @@
 import { io } from 'socket.io-client'
 
-const baseUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3000'
+const baseUrl = import.meta.env.VITE_SOCKET_URL || window.location.origin
 
 export const createTerminalSocket = (token) => {
   if (!token) {
