@@ -279,12 +279,8 @@ server {
     # Admin Panel - servir arquivos estáticos
     location /admin/ {
         alias /var/www/panel/;
-        try_files \$uri \$uri/ @fallback;
+        try_files $uri $uri/ /admin/index.html;
         index index.html;
-    }
-    
-    location @fallback {
-        rewrite ^.*$ /admin/index.html last;
     }
     
     # Admin Panel assets
