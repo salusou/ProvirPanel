@@ -7,6 +7,7 @@ import Terminal from './components/Terminal.jsx'
 import DockerPanel from './components/DockerPanel.jsx'
 import FileManager from './components/FileManager.jsx'
 import DomainsPanel from './components/DomainsPanel.jsx'
+import UsersPanel from './components/UsersPanel.jsx'
 import api from './services/api.js'
 
 const App = () => {
@@ -99,6 +100,7 @@ const App = () => {
           <Route path="docker" element={<DockerPanel />} />
           <Route path="domains" element={<DomainsPanel />} />
           <Route path="files" element={<FileManager />} />
+          <Route path="users" element={<UsersPanel />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
