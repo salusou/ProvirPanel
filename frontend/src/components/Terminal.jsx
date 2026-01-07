@@ -110,6 +110,7 @@ const Terminal = () => {
     { id: generateUUID(), title: 'Terminal 1', status: 'disconnected' }
   ])
   const [activeId, setActiveId] = useState(() => tabs[0].id)
+  const [editorModal, setEditorModal] = useState(null)
   const historyRef = useRef(loadHistory())
   const terminalsRef = useRef(new Map())
   const socketsRef = useRef(new Map())
@@ -233,6 +234,16 @@ const Terminal = () => {
           if (command) {
             historyRef.current = [...historyRef.current, command].slice(-100)
             saveHistory(historyRef.current)
+          }
+
+          // Interceptar comando open
+          if (command.startsWith('open ')) {
+            const filename = command.substring(5).trim()
+            if (filename) {
+              setEditorModal({ filename, cwd: cwdRef.current.get(id) || '~' })
+              writePrompt(term, cwdRef.current.get(id))
+              return
+            }
           }
 
           const socket = socketsRef.current.get(id)
@@ -622,8 +633,100 @@ const Terminal = () => {
           </div>
         ))}
       </div>
+
+      {editorModal && (
+        <FileEditorModal
+          filename={editorModal.filename}
+          cwd={editorModal.cwd}
+          onClose={() => setEditorModal(null)}
+        />
+      )}
     </div>
   )
 }
 
 export default Terminal
+
+const FileEditorModal = ({ filename, cwd, onClose }) => {
+  const [content, setContent] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    const loadFile = async () => {
+      try {
+        const path = filename.startsWith('/') ? filename : `${cwd}/${filename}`
+        const response = await fetch(`/api/storage/file?path=${encodeURIComponent(path)}`)
+        if (response.ok) {
+          const text = await response.text()
+          setContent(text)
+        } else {
+          setContent('// Arquivo não encontrado ou erro ao carregar')
+        }
+      } catch (error) {
+        setContent('// Erro ao carregar arquivo')
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadFile()
+  }, [filename, cwd])
+
+  const saveFile = async () => {
+    setSaving(true)
+    try {
+      const path = filename.startsWith('/') ? filename : `${cwd}/${filename}`
+      await fetch(`/api/storage/file?path=${encodeURIComponent(path)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'text/plain' },
+        body: content
+      })
+    } catch (error) {
+      console.error('Erro ao salvar:', error)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-slate-900 border border-slate-700 rounded-2xl w-[90vw] h-[80vh] flex flex-col">
+        <div className="flex items-center justify-between p-4 border-b border-slate-700">
+          <div>
+            <h3 className="text-lg font-semibold text-white">Editor</h3>
+            <p className="text-sm text-slate-400">{filename}</p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              className="px-3 py-1 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 disabled:opacity-50"
+              onClick={saveFile}
+              disabled={saving}
+            >
+              {saving ? 'Salvando...' : 'Salvar'}
+            </button>
+            <button
+              className="px-3 py-1 bg-slate-700 text-white rounded-lg text-sm hover:bg-slate-600"
+              onClick={onClose}
+            >
+              Fechar
+            </button>
+          </div>
+        </div>
+        <div className="flex-1 p-4">
+          {loading ? (
+            <div className="flex items-center justify-center h-full text-slate-400">
+              Carregando arquivo...
+            </div>
+          ) : (
+            <textarea
+              className="w-full h-full bg-slate-950 text-slate-200 p-4 rounded-lg border border-slate-700 font-mono text-sm resize-none focus:outline-none focus:border-blue-500"
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              placeholder="Conteúdo do arquivo..."
+            />
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
