@@ -149,4 +149,67 @@ router.get('/me', authMiddleware, async (req, res, next) => {
   }
 });
 
+router.get('/users', authMiddleware, async (req, res, next) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+    const result = await pool.query(
+      'SELECT id, username, role, created_at FROM users ORDER BY created_at DESC'
+    );
+    return res.json({ users: result.rows });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+router.put('/users/:id', authMiddleware, async (req, res, next) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+    const { id } = req.params;
+    const { username, password, role } = req.body || {};
+    
+    if (!username || !role) {
+      return res.status(400).json({ message: 'username and role are required' });
+    }
+    if (!['admin', 'dev', 'viewer'].includes(role)) {
+      return res.status(400).json({ message: 'Invalid role' });
+    }
+
+    let query = 'UPDATE users SET username = $1, role = $2 WHERE id = $3';
+    let params = [username, role, id];
+    
+    if (password) {
+      const passwordHash = await bcrypt.hash(password, 12);
+      query = 'UPDATE users SET username = $1, role = $2, password = $3 WHERE id = $4';
+      params = [username, role, passwordHash, id];
+    }
+    
+    await pool.query(query, params);
+    return res.json({ message: 'User updated' });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+router.delete('/users/:id', authMiddleware, async (req, res, next) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+    const { id } = req.params;
+    
+    if (parseInt(id) === req.user.id) {
+      return res.status(400).json({ message: 'Cannot delete yourself' });
+    }
+    
+    await pool.query('DELETE FROM users WHERE id = $1', [id]);
+    return res.json({ message: 'User deleted' });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 module.exports = router;

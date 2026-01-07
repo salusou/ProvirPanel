@@ -656,8 +656,9 @@ const FileEditorModal = ({ filename, cwd, onClose }) => {
   useEffect(() => {
     const loadFile = async () => {
       try {
-        const path = filename.startsWith('/') ? filename : `${cwd}/${filename}`
-        const response = await api.get(`/storage/file?path=${encodeURIComponent(path)}`)
+        // Usar apenas o nome do arquivo, não o path completo
+        const relativePath = filename.replace(/^.*\//, '') // Remove path, mantém só o nome
+        const response = await api.get(`/storage/file?path=${encodeURIComponent(relativePath)}`)
         setContent(response.data)
       } catch (error) {
         setContent('// Arquivo não encontrado ou erro ao carregar')
@@ -671,8 +672,8 @@ const FileEditorModal = ({ filename, cwd, onClose }) => {
   const saveFile = async () => {
     setSaving(true)
     try {
-      const path = filename.startsWith('/') ? filename : `${cwd}/${filename}`
-      await api.put(`/storage/file?path=${encodeURIComponent(path)}`, content, {
+      const relativePath = filename.replace(/^.*\//, '') // Remove path, mantém só o nome
+      await api.put(`/storage/file?path=${encodeURIComponent(relativePath)}`, content, {
         headers: { 'Content-Type': 'text/plain' }
       })
     } catch (error) {
