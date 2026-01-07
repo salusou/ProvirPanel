@@ -34,8 +34,8 @@ app.get('/health', (req, res) => {
 });
 
 app.use('/auth', authRoutes);
-app.use('/api/metrics', authMiddleware, metricsRoutes);
 app.use('/api', authMiddleware, logsRoutes);
+app.use('/api/metrics', authMiddleware, metricsRoutes);
 app.use('/terminal', authMiddleware, terminalRoutes.router);
 app.use('/docker', authMiddleware, dockerRoutes.router);
 app.use('/storage', authMiddleware, storageRoutes);
