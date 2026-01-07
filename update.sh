@@ -21,7 +21,14 @@ cd "${INSTALL_DIR}"
 log "Baixando atualizações"
 git config --global --add safe.directory "${INSTALL_DIR}"
 git fetch origin
-git reset --hard origin/main
+
+# Verificar se há mudanças
+if git diff --quiet HEAD origin/main; then
+  log "Nenhuma atualização disponível"
+else
+  log "Atualizações encontradas, aplicando..."
+  git reset --hard origin/main
+fi
 
 # Instalar dependências backend
 log "Atualizando dependências backend"
