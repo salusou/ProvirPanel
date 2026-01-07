@@ -182,6 +182,11 @@ SQL
   else
     log "Warning: schema.sql not found, skipping database schema setup"
   fi
+  
+  # Garantir permissões para o usuário provirpanel
+  sudo -u postgres psql provirpanel -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO provirpanel;"
+  sudo -u postgres psql provirpanel -c "GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO provirpanel;"
+  sudo -u postgres psql provirpanel -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO provirpanel;"
 }
 
 install_dependencies() {
