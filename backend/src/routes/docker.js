@@ -455,64 +455,26 @@ router.post('/services', async (req, res, next) => {
       if (createManager && templateId === 'postgres-db') {
         progress.push(`🔧 Criando pgAdmin...`);
         
-        try {
-          const images = await dockerManager.listImages();
-          const pgAdminImage = images.find(img => img.RepoTags && img.RepoTags.some(tag => tag.includes('pgadmin4')));
-          if (pgAdminImage) {
-            progress.push(`🗑️ Removendo imagem antiga do pgAdmin...`);
-            await dockerManager.docker.getImage(pgAdminImage.Id).remove({ force: true });
-          }
-        } catch (err) {
-          progress.push(`⚠️ Aviso ao remover imagem antiga: ${err.message}`);
-        }
-        
-        const pgAdminTemplate = SERVICE_TEMPLATES.find(t => t.id === 'pgadmin');
-        const usedPortsForPgAdmin = await dockerManager.getUsedPorts();
-        
         const pgAdminPort = await dockerManager.findAvailablePort(8081);
         if (!pgAdminPort) {
           throw new Error('Nenhuma porta disponível para pgAdmin');
         }
         progress.push(`✅ Usando porta ${pgAdminPort} para pgAdmin`);
         
-        const pgAdminVolumes = [{
-          hostPath: path.join(dockerBaseDir, `${name}-pgadmin`),
-          containerPath: '/var/lib/pgadmin'
-        }];
-        
-        const pgAdminDir = pgAdminVolumes[0].hostPath;
-        
-        if (fs.existsSync(pgAdminDir)) {
-          fs.rmSync(pgAdminDir, { recursive: true, force: true });
-        }
-        
-        fs.mkdirSync(pgAdminDir, { recursive: true, mode: 0o777 });
-        fs.mkdirSync(path.join(pgAdminDir, 'sessions'), { recursive: true, mode: 0o777 });
-        fs.mkdirSync(path.join(pgAdminDir, 'storage'), { recursive: true, mode: 0o777 });
-        
-        try {
-          const { execSync } = require('child_process');
-          execSync(`chown -R 5050:0 "${pgAdminDir}"`, { stdio: 'ignore' });
-          execSync(`chmod -R u+rwX,g+rwX "${pgAdminDir}"`, { stdio: 'ignore' });
-        } catch (err) {
-          progress.push(`⚠️ Aviso: Não foi possível ajustar permissões: ${err.message}`);
-        }
-        
         const pgAdminConfig = {
           name: `${name}-pgadmin`,
+          User: 'root',
           HostConfig: {
             NetworkMode: networkName,
             PortBindings: {
               '80/tcp': [{ HostPort: String(pgAdminPort) }]
-            },
-            Binds: pgAdminVolumes.map(v => `${v.hostPath}:${v.containerPath}`)
+            }
           },
           Env: [
             'PGADMIN_DEFAULT_EMAIL=admin@admin.com',
             'PGADMIN_DEFAULT_PASSWORD=admin',
             'PGADMIN_CONFIG_SERVER_MODE=False',
-            'PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED=False',
-            'PGADMIN_CONFIG_SESSION_DB_PATH=/var/lib/pgadmin/sessions'
+            'PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED=False'
           ],
           ExposedPorts: { '80/tcp': {} }
         };
@@ -527,7 +489,7 @@ router.post('/services', async (req, res, next) => {
           containerId: pgAdminContainer.Id,
           hostPort: pgAdminPort,
           containerPort: 80,
-          volumes: pgAdminVolumes,
+          volumes: [],
           networkName,
           url: `http://localhost:${pgAdminPort}`,
           serverIP: getLocalIP(),
