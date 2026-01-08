@@ -455,6 +455,17 @@ router.post('/services', async (req, res, next) => {
       if (createManager && templateId === 'postgres-db') {
         progress.push(`🔧 Criando pgAdmin...`);
         
+        try {
+          const images = await dockerManager.listImages();
+          const pgAdminImage = images.find(img => img.RepoTags && img.RepoTags.some(tag => tag.includes('pgadmin4')));
+          if (pgAdminImage) {
+            progress.push(`🗑️ Removendo imagem antiga do pgAdmin...`);
+            await dockerManager.docker.getImage(pgAdminImage.Id).remove({ force: true });
+          }
+        } catch (err) {
+          progress.push(`⚠️ Aviso ao remover imagem antiga: ${err.message}`);
+        }
+        
         const pgAdminTemplate = SERVICE_TEMPLATES.find(t => t.id === 'pgadmin');
         const usedPortsForPgAdmin = await dockerManager.getUsedPorts();
         
