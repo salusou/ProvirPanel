@@ -471,6 +471,13 @@ router.post('/services', async (req, res, next) => {
         
         fs.mkdirSync(pgAdminVolumes[0].hostPath, { recursive: true });
         
+        // Corrigir permissões do diretório pgAdmin
+        try {
+          require('child_process').execSync(`chmod -R 777 "${pgAdminVolumes[0].hostPath}"`);
+        } catch (err) {
+          progress.push(`⚠️ Aviso: Não foi possível ajustar permissões: ${err.message}`);
+        }
+        
         const pgAdminConfig = {
           name: `${name}-pgadmin`,
           HostConfig: {
