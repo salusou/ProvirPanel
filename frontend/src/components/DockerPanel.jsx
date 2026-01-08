@@ -49,6 +49,7 @@ const Toast = ({ message, type, onClose }) => (
 const DockerPanel = () => {
   const [activeTab, setActiveTab] = useState('services')
   const [containers, setContainers] = useState([])
+  const [images, setImages] = useState([])
   const [stats, setStats] = useState({})
   const [selectedContainer, setSelectedContainer] = useState(null)
   const [logs, setLogs] = useState('')
@@ -107,6 +108,15 @@ const DockerPanel = () => {
     }
   }
 
+  const loadImages = async () => {
+    try {
+      const response = await api.get('/docker/images')
+      setImages(response.data.images || [])
+    } catch (err) {
+      addToast('Erro ao carregar imagens', 'error')
+    }
+  }
+
   const loadTemplates = async () => {
     try {
       const response = await api.get('/docker/templates')
@@ -161,6 +171,7 @@ const DockerPanel = () => {
     loadServices()
     loadNetworks()
     loadPostgresDatabases()
+    loadImages()
   }, [])
 
   useEffect(() => {
@@ -301,8 +312,29 @@ const DockerPanel = () => {
     try {
       await api.post('/docker/images/pull', { imageName })
       addToast('Imagem baixada')
+      loadImages()
     } catch (err) {
       addToast('Erro ao baixar imagem', 'error')
+    }
+  }
+
+  const removeImage = async (imageId) => {
+    try {
+      await api.delete(`/docker/images/${imageId}`)
+      addToast('Imagem removida')
+      loadImages()
+    } catch (err) {
+      addToast('Erro ao remover imagem', 'error')
+    }
+  }
+
+  const updateImage = async (imageId) => {
+    try {
+      await api.post(`/docker/images/${imageId}/pull`)
+      addToast('Imagem atualizada')
+      loadImages()
+    } catch (err) {
+      addToast('Erro ao atualizar imagem', 'error')
     }
   }
 
@@ -1139,37 +1171,77 @@ const DockerPanel = () => {
       )}
 
       {activeTab === 'images' && (
-        <div className="grid gap-4 lg:grid-cols-2">
-          {presetImages.map((image) => (
-            <div
-              key={image.name}
-              className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-lg font-semibold text-white">{image.name}</p>
-                  <p className="text-xs text-slate-400">{image.description}</p>
-                </div>
-                <span className="rounded-full border border-slate-800 bg-slate-950 px-3 py-1 text-xs text-blue-200">
-                  {image.image}:{image.tag}
-                </span>
-              </div>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <button
-                  className="rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-slate-200 transition hover:border-blue-500/60"
-                  onClick={() => pullImage(image.image)}
-                >
-                  Pull Image
-                </button>
-                <button
-                  className="rounded-xl bg-blue-500 px-3 py-2 text-xs font-semibold text-slate-950 transition hover:bg-blue-400"
-                  onClick={() => setWizard(image)}
-                >
-                  Rodar container
-                </button>
-              </div>
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+            <p className="text-xs uppercase tracking-[0.3em] text-slate-400 mb-3">Imagens Docker</p>
+            <div className="space-y-2">
+              {images.map((img) => {
+                const tag = img.RepoTags?.[0] || 'none'
+                const size = img.Size ? `${(img.Size / 1024 / 1024).toFixed(0)} MB` : 'N/A'
+                return (
+                  <div key={img.Id} className="rounded-xl border border-slate-800 bg-slate-950/60 px-4 py-3 flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-white">{tag}</p>
+                      <p className="text-xs text-slate-400">ID: {img.Id.slice(7, 19)} • Tamanho: {size}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        className="rounded-xl border border-blue-800 bg-blue-950 px-3 py-2 text-xs text-blue-200 hover:bg-blue-900"
+                        onClick={() => updateImage(img.Id)}
+                      >
+                        Atualizar
+                      </button>
+                      <button
+                        className="rounded-xl border border-rose-800 bg-rose-950 px-3 py-2 text-xs text-rose-200 hover:bg-rose-900"
+                        onClick={() => removeImage(img.Id)}
+                      >
+                        Remover
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+              {images.length === 0 && (
+                <p className="text-sm text-slate-400">Nenhuma imagem encontrada</p>
+              )}
             </div>
-          ))}
+          </div>
+
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+            <p className="text-xs uppercase tracking-[0.3em] text-slate-400 mb-3">Imagens Populares</p>
+            <div className="grid gap-4 lg:grid-cols-2">
+              {presetImages.map((image) => (
+                <div
+                  key={image.name}
+                  className="rounded-xl border border-slate-800 bg-slate-950/60 p-4"
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-lg font-semibold text-white">{image.name}</p>
+                      <p className="text-xs text-slate-400">{image.description}</p>
+                    </div>
+                    <span className="rounded-full border border-slate-800 bg-slate-950 px-3 py-1 text-xs text-blue-200">
+                      {image.image}:{image.tag}
+                    </span>
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <button
+                      className="rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-slate-200 transition hover:border-blue-500/60"
+                      onClick={() => pullImage(`${image.image}:${image.tag}`)}
+                    >
+                      Baixar
+                    </button>
+                    <button
+                      className="rounded-xl bg-blue-500 px-3 py-2 text-xs font-semibold text-slate-950 transition hover:bg-blue-400"
+                      onClick={() => setWizard(image)}
+                    >
+                      Rodar
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 

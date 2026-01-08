@@ -623,6 +623,27 @@ router.post('/containers/:id/restart', async (req, res, next) => {
   }
 });
 
+router.delete('/images/:id', async (req, res, next) => {
+  try {
+    await dockerManager.docker.getImage(req.params.id).remove({ force: true });
+    res.json({ status: 'removed' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/images/:id/pull', async (req, res, next) => {
+  try {
+    const image = dockerManager.docker.getImage(req.params.id);
+    const info = await image.inspect();
+    const tag = info.RepoTags && info.RepoTags[0] ? info.RepoTags[0] : req.params.id;
+    await dockerManager.pullImage(tag);
+    res.json({ status: 'pulled' });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.delete('/containers/:id', async (req, res, next) => {
   try {
     await dockerManager.removeContainer(req.params.id);
