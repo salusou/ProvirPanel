@@ -469,11 +469,14 @@ router.post('/services', async (req, res, next) => {
           containerPath: '/var/lib/pgadmin'
         }];
         
-        fs.mkdirSync(pgAdminVolumes[0].hostPath, { recursive: true });
+        const pgAdminDir = pgAdminVolumes[0].hostPath;
+        fs.mkdirSync(pgAdminDir, { recursive: true });
+        fs.mkdirSync(path.join(pgAdminDir, 'sessions'), { recursive: true });
+        fs.mkdirSync(path.join(pgAdminDir, 'storage'), { recursive: true });
         
-        // Corrigir permissões do diretório pgAdmin
+        // Corrigir permissões (UID 5050 = pgadmin user)
         try {
-          require('child_process').execSync(`chmod -R 777 "${pgAdminVolumes[0].hostPath}"`);
+          require('child_process').execSync(`sudo chown -R 5050:5050 "${pgAdminDir}"`);
         } catch (err) {
           progress.push(`⚠️ Aviso: Não foi possível ajustar permissões: ${err.message}`);
         }
@@ -490,7 +493,8 @@ router.post('/services', async (req, res, next) => {
           Env: [
             'PGADMIN_DEFAULT_EMAIL=admin@admin.com',
             'PGADMIN_DEFAULT_PASSWORD=admin',
-            'PGADMIN_CONFIG_SERVER_MODE=False'
+            'PGADMIN_CONFIG_SERVER_MODE=False',
+            'PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED=False'
           ],
           ExposedPorts: { '80/tcp': {} }
         };
