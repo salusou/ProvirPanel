@@ -480,9 +480,8 @@ router.post('/services', async (req, res, next) => {
         fs.mkdirSync(path.join(pgAdminDir, 'storage'), { recursive: true, mode: 0o777 });
         
         try {
-          fs.chmodSync(pgAdminDir, 0o777);
-          fs.chmodSync(path.join(pgAdminDir, 'sessions'), 0o777);
-          fs.chmodSync(path.join(pgAdminDir, 'storage'), 0o777);
+          const { execSync } = require('child_process');
+          execSync(`sudo chmod -R 777 "${pgAdminDir}"`, { stdio: 'ignore' });
         } catch (err) {
           progress.push(`⚠️ Aviso: Não foi possível ajustar permissões: ${err.message}`);
         }
